@@ -101,22 +101,34 @@ originó este proyecto: definiciones que divergen porque nunca vivieron en un so
 ## Estructura
 
 ```
+├── AGENTS.md                     ← manual completo, para cualquier agente (Claude Code, Codex…)
+├── CLAUDE.md                     ← gemelo de AGENTS.md, resumen para Claude Code
 ├── Admin/
 │   ├── esquema.yaml              ← el contrato: fuente única de verdad
 │   ├── Reglas del Vault.md       ← la filosofía y la ética de captura
 │   ├── Catálogo de Metadatos.md  ← el vocabulario, campo por campo
 │   ├── Guía de Estilo.md         ← formato, nombres de archivo, estructura de carpetas
-│   └── Templates/                ← una plantilla por tipo (vacías)
+│   ├── Open Knowledge Format — cómo funciona.md   ← el estándar y dónde diverge este vault
+│   └── Templates/
+│       ├── _plantilla-okf-genérica.md   ← el punto de partida real (ver arriba)
+│       └── (una plantilla por tipo de este ejemplo, ya adaptadas)
 ├── Bases/                        ← vistas .base: el clasificador (no las carpetas)
 ├── Notes/                        ← los eventos (los verbos)
 ├── Entities/                     ← las personas y organizaciones (los sustantivos)
 ├── Inbox/                        ← material sin clasificar, a la espera de procesarse
 └── .claude/
     ├── settings.json             ← conecta los hooks de abajo a Claude Code
-    └── hooks/
-        ├── check_frontmatter.py  ← valida al escribir (fail-open, feedback inmediato)
-        └── gate_vault.sh         ← valida al cerrar el turno (fail-closed, el candado real)
+    ├── hooks/
+    │   ├── check_frontmatter.py  ← valida al escribir (fail-open, feedback inmediato)
+    │   └── gate_vault.sh         ← valida al cerrar el turno (fail-closed, el candado real)
+    └── skills/
+        └── obsidian-cli/         ← adaptación de la skill de Kepano (ejemplo, ver abajo)
 ```
+
+`AGENTS.md`/`CLAUDE.md` son el punto de entrada: lo primero que lee cualquier agente antes de
+tocar una nota. Son gemelos a propósito — mismas reglas, dos formatos, para que el mismo vault
+sirva tanto a Claude Code como a cualquier otro agente que hable el
+[estándar Agent Skills](https://agentskills.io/specification).
 
 **Las carpetas son planas a propósito.** `Notes/` y `Entities/` no tienen subcarpetas.
 Clasificar con carpetas es apostar a que hoy adivinaste la única forma en que vas a querer ver
