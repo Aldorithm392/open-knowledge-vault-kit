@@ -1,0 +1,107 @@
+filters:
+  and:
+    - file.inFolder("Notes")
+    - file.ext == "md"
+formulas:
+  actualizada: file.mtime.format("MM-DD HH:mm")
+properties:
+  file.name:
+    displayName: Nota
+  case:
+    displayName: Caso
+  event_date:
+    displayName: Fecha del hecho
+  classification:
+    displayName: Clasificación
+  state:
+    displayName: Estado
+  municipality:
+    displayName: Municipio
+  deaths:
+    displayName: Fallecidos
+  geo_precision:
+    displayName: Precisión
+  scope:
+    displayName: Alcance
+  theme:
+    displayName: Tema
+  source:
+    displayName: Medio
+  entities:
+    displayName: Entidades
+  published:
+    displayName: Publicada
+  timestamp:
+    displayName: Ingesta
+  formula.actualizada:
+    displayName: Actualizada
+views:
+  - type: table
+    name: Eventos
+    filters:
+      and:
+        - type == "event"
+    groupBy:
+      property: state
+      direction: ASC
+    order:
+      - file.name
+      - event_date
+      - classification
+      - state
+      - municipality
+      - deaths
+      - geo_precision
+      - entities
+    sort:
+      - property: event_date
+        direction: DESC
+      - property: timestamp
+        direction: DESC
+    summaries:
+      deaths: Sum
+  - type: table
+    name: Recientes
+    order:
+      - file.name
+      - type
+      - state
+      - classification
+      - formula.actualizada
+    sort:
+      - property: file.mtime
+        direction: DESC
+    limit: 40
+  - type: table
+    name: Contexto
+    filters:
+      and:
+        - type == "context"
+    order:
+      - file.name
+      - scope
+      - state
+      - theme
+  - type: table
+    name: Investigaciones
+    filters:
+      and:
+        - type == "investigation"
+    order:
+      - file.name
+      - theme
+      - published
+      - source
+    sort:
+      - property: file.mtime
+        direction: DESC
+  - type: table
+    name: Por caso
+    groupBy:
+      property: case
+      direction: ASC
+    order:
+      - file.name
+      - case
+      - type
+      - state

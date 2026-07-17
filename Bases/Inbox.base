@@ -1,0 +1,54 @@
+filters:
+  and:
+    - 'file.inFolder("Inbox")'
+    - 'file.ext == "md"'
+
+formulas:
+  recibida: 'file.ctime.format("MM-DD HH:mm")'
+
+properties:
+  file.name:
+    displayName: "Nota cruda"
+  source:
+    displayName: "Medio"
+  actor:
+    displayName: "Interés"
+  fecha:
+    displayName: "Fecha (fuente)"
+  status:
+    displayName: "Estatus"
+  formula.recibida:
+    displayName: "Recibida"
+  file.mtime:
+    displayName: "Modificada"
+
+views:
+  - type: table
+    name: "Por procesar"
+    filters:
+      and:
+        - 'status == "sin-procesar"'
+    order:
+      - file.name
+      - source
+      - actor
+      - formula.recibida
+      - status
+    groupBy:
+      property: source
+      direction: ASC
+    sort:
+      - property: file.ctime
+        direction: DESC
+  - type: table
+    name: "Todas (recientes)"
+    order:
+      - file.name
+      - status
+      - source
+      - formula.recibida
+      - file.mtime
+    sort:
+      - property: file.mtime
+        direction: DESC
+    limit: 50

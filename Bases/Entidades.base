@@ -1,0 +1,73 @@
+filters:
+  and:
+    - file.inFolder("Entities")
+    - file.ext == "md"
+formulas:
+  conexiones: file.backlinks.length
+properties:
+  file.name:
+    displayName: Entidad
+  role:
+    displayName: Rol
+  status:
+    displayName: Estatus
+  alleged:
+    displayName: Presunto
+  organizations:
+    displayName: Organizaciones
+  org_type:
+    displayName: Tipo
+  scope:
+    displayName: Ámbito
+  aliases:
+    displayName: Alias
+  formula.conexiones:
+    displayName: Conexiones
+views:
+  - type: table
+    name: Personas
+    filters:
+      and:
+        - type == "person"
+    groupBy:
+      property: role
+      direction: ASC
+    order:
+      - file.name
+      - role
+      - status
+      - alleged
+      - organizations
+      - formula.conexiones
+    sort:
+      - property: formula.conexiones
+        direction: DESC
+  - type: table
+    name: Organizaciones
+    filters:
+      and:
+        - type == "organization"
+    groupBy:
+      property: org_type
+      direction: ASC
+    order:
+      - file.name
+      - org_type
+      - scope
+      - status
+      - formula.conexiones
+    sort:
+      - property: formula.conexiones
+        direction: DESC
+  - type: table
+    name: Más conectadas
+    order:
+      - file.name
+      - type
+      - role
+      - org_type
+      - formula.conexiones
+    sort:
+      - property: formula.conexiones
+        direction: DESC
+    limit: 30

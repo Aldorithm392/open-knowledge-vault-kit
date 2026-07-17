@@ -1,0 +1,312 @@
+# =============================================================================
+# esquema.yaml — CONTRATO DEL VAULT NotasRojas (FUENTE ÚNICA DE VERDAD)
+# =============================================================================
+# Toda definición de campos, dominios y valores permitidos del vault vive AQUÍ.
+# El Catálogo de Metadatos, las plantillas (Admin/Templates/), la skill
+# clasificar-nota y el portero (python3 -m obsidiana validar-vault, en
+# obsidiana/vault.py) son VISTAS DERIVADAS de este archivo: si difieren, ESTE
+# archivo manda y las vistas se regeneran.
+#
+# Gobernanza (cómo evoluciona el esquema):
+#   1. Un piloto de ingesta detecta una necesidad (campo/valor nuevo).
+#   2. Se propone en el Log del día (Admin/Log/) con evidencia.
+#   3. El usuario aprueba (AskUserQuestion / decisión explícita).
+#   4. Se edita SOLO este archivo (sube schema_version si cambia el contrato).
+#   5. Se regeneran las vistas (Catálogo §2-§3, skill §6, plantillas) y, si hay
+#      migración de notas existentes, se corre ops/migrar_vault.py.
+#   6. El portero exige el contrato nuevo. Nada se edita "de paso" en las vistas.
+#
+# Clases de dominio (terminología de la guía de diseño del proyecto):
+#   cerrado          -> enum fijo; el portero RECHAZA valores fuera de la lista.
+#   abierto-canonico -> texto con forma canónica/identidad fija (URL, nombre
+#                       oficial, clave INEGI); se valida FORMATO y, si hay
+#                       catálogo, pertenencia (error o aviso según el campo).
+#   libre            -> texto en español; solo se valida presencia/estilo.
+#   derivado         -> lo produce el código o una regla; el portero verifica
+#                       consistencia, ningún humano/LLM lo inventa.
+#
+# Convenciones globales:
+#   - Claves de frontmatter en INGLÉS; títulos y texto libre en ESPAÑOL.
+#   - Nulo canónico: "" para escalares, [] para listas. PROHIBIDOS los
+#     sentinelas tipo "00000"/"N/A"/"sin dato".
+#   - Listas SIEMPRE en flujo inline: campo: ["[[A]]", "[[B]]"].
+#   - Strings entre comillas dobles; floats (lat/lon) sin comillas; claves
+#     numéricas con cero inicial (id, cve_ent, cvegeo, cp) SIEMPRE citadas.
+#   - Wikilink en frontmatter: "[[Título de la ficha]]" (string plano con
+#     corchetes; Obsidian lo reconoce como arista del grafo).
+#   - Prohibido en notas de datos: tags, categories, confianza.
+#   - Orden de campos en disco = orden de la plantilla de su type.
+
+schema_version: 5
+
+# -----------------------------------------------------------------------------
+# ENUMS CERRADOS (compartidos; el portero rechaza cualquier valor fuera de lista)
+# -----------------------------------------------------------------------------
+enums:
+  type: [event, context, person, organization, investigation]   # reference = solo Admin/
+  case: [notas-rojas, corrupcion]
+  geo_precision: [street, locality, municipality, state]
+  scope_context: [national, state, municipal, locality, street]
+  role_person: [politician, journalist, official, criminal, military, business, civilian, unknown]
+  status_person: [active, detained, fugitive, killed, sentenced, desaparecido, unknown]
+  org_type: [cartel, cell, gang, institution, party, collective, business]
+  scope_org: [local, state, regional, national, transnational]
+  status_org: [active, fragmented, dismantled, unknown]
+  # classification: dominio CERRADO (ya no "lista abierta"); extensión = gobernanza.
+  # En el vault el valor "narcoviolencia-enfrentamiento" va SIN barra (la barra
+  # rompe el nodo wikilink de Obsidian); el maestro conserva su token con barra
+  # (ver mappings.classification).
+  classification_crimen:
+    [homicidio, feminicidio, secuestro, desaparicion, robo con violencia,
+     extorsion, narcoviolencia-enfrentamiento, hallazgo de restos, otro]
+  classification_corrupcion:
+    [corrupcion, peculado, cohecho, conflicto de interes, abuso de autoridad,
+     enriquecimiento ilicito]
+  # Rol del actor EN la nota (aristas tipadas de event; decisión del usuario 2026-07-16)
+  actor_roles: [victim, alleged, authority, mentioned]
+  # Relaciones persona<->persona (frontmatter de person; decisión del usuario 2026-07-16)
+  person_relations: [partner_of, ex_partner_of, family_of, associate_of, criminal_link]
+  # Relaciones organización<->organización (frontmatter de organization; v5, 2026-07-16)
+  #   faction_of  = ASIMÉTRICA (célula/facción de un cártel mayor); se escribe en el
+  #                 hijo y el padre se recupera por backlinks (no lleva recíproco).
+  #   rival_of / allied_with = SIMÉTRICAS y recíprocas (como las de persona).
+  # El nexo persona->organización PRESUNTO vive en el campo `alleged_link` de person
+  # (cross-type, single-authored; la org lo ve por backlinks), NO aquí.
+  org_relations: [faction_of, rival_of, allied_with]
+
+# Las 32 entidades federativas (forma canónica del proyecto).
+# COPIA VERIFICADA de obsidiana/schema.py:ESTADOS — pytest la compara (test de
+# coherencia); si divergen, schema.py manda y esto se regenera.
+estados:
+  [Aguascalientes, Baja California, Baja California Sur, Campeche, Chiapas,
+   Chihuahua, Ciudad de México, Coahuila, Colima, Durango, Guanajuato, Guerrero,
+   Hidalgo, Jalisco, México, Michoacán, Morelos, Nayarit, Nuevo León, Oaxaca,
+   Puebla, Querétaro, Quintana Roo, San Luis Potosí, Sinaloa, Sonora, Tabasco,
+   Tamaulipas, Tlaxcala, Veracruz, Yucatán, Zacatecas]
+
+# -----------------------------------------------------------------------------
+# DOMINIOS DE CATÁLOGO (abiertos-canónicos respaldados por catálogo oficial)
+# -----------------------------------------------------------------------------
+catalogs:
+  sesnsp:
+    fuente_de_verdad: "obsidiana/sesnsp.py"    # cadenas EXACTAS del catálogo oficial
+    reglas:
+      - "Desde v4 los 4 campos SESNSP viven SOLO en el maestro (ninguna pregunta del vault los usa; se recuperan por join con `id`)."
+      - "En el maestro: cadenas EXACTAS de sesnsp.py, inferencias con sufijo ' (presunto)', vacío = sin dato."
+  inegi_municipios:
+    archivo: "geocoder/mx_municipios_mgn.csv"   # 2,478 municipios; cve_ent+cve_mun
+    reglas:
+      - "municipality es texto de la fuente; la IDENTIDAD canónica es cvegeo (5 díg. INEGI)."
+      - "cvegeo esperado cuando geo_precision ∈ {municipality, locality, street} (aviso si falta)."
+  sepomex:
+    archivo: "geocoder/sepomex_cp.csv"
+    reglas:
+      - "cp = 5 dígitos reales; sentinelas (00000/99999) prohibidos; \"\" si no se sabe."
+
+# -----------------------------------------------------------------------------
+# MAPEOS vault <-> maestro (el ÚNICO lugar donde se declaran)
+# -----------------------------------------------------------------------------
+mappings:
+  geo_precision:            # vault: maestro (obsidiana/schema.py:PRECISIONES)
+    street: punto
+    locality: colonia
+    municipality: aproximada-municipio
+    state: aproximada-estado
+  classification:           # idénticos salvo el token con barra
+    narcoviolencia-enfrentamiento: narcoviolencia/enfrentamiento
+  campos:                   # clave vault -> columna maestro (solo las no obvias)
+    deaths: victimas        # RENOMBRE 2026-07-16: 'victims' medía FALLECIDOS
+    description: descripcion
+    url: url
+    source: fuente
+    timestamp: fecha_captura
+    event_date: fecha
+    state: estado
+    municipality: municipio
+    locality: colonia_localidad
+    lat: latitud
+    lon: longitud
+    classification: clasificacion   # exportar quita corchetes + mapping de arriba
+
+# -----------------------------------------------------------------------------
+# TIPOS Y CAMPOS
+# requerido: true  -> "" o ausente = ERROR del portero
+# esperado (aviso) -> se acepta vacío pero el portero lo reporta
+# -----------------------------------------------------------------------------
+# Historial de recortes (el migrador aplica `quitar` a las notas existentes):
+# v4 (2026-07-16, Paso 0 / preguntas): un campo solo existe si una pregunta lo
+# paga. sesnsp_* viven en el MAESTRO (join por id); cve_ent = cvegeo[:2]
+# (derivable); cp sin pregunta y con catálogo fuente sucio. `context` queda
+# PENDIENTE de decisión (sin datos, sin preguntas; no se toca todavía).
+# v5 (2026-07-16, nexos + procedencia): ADITIVO — no recorta nada. Suma campos
+# opcionales (person.alleged_link; organization.faction_of/rival_of/allied_with;
+# event/context.author/published). Las notas viejas siguen válidas; el migrador
+# solo re-estampa schema_version. Por eso no hay entrada `5:` en `migraciones`.
+migraciones:
+  4:
+    event:
+      quitar: [sesnsp_tipo, sesnsp_subtipo, sesnsp_modalidad, cve_ent, cp]
+
+types:
+
+  event:
+    plantilla: "Admin/Templates/event.md"
+    archivo: "Notes/AAAA-MM-DD-<clasificacion>-<municipio>-<id6>.md"   # slugs sin acentos; fecha = event_date o timestamp
+    campos:
+      type:            {dominio: cerrado, valor_fijo: event, requerido: true}
+      case:            {dominio: cerrado, enum: case, requerido: true}
+      id:              {dominio: derivado, formato: "hex(12)", requerido: true,
+                        nota: "Receta actual: sha1(url|fecha|municipio|colonia|clasificacion|hecho)[:12]. Se unifica/canoniza en Fase 4 (id canónico + event_key)."}
+      url:             {dominio: abierto-canonico, formato: URI, requerido: true, unico: true}
+      title:           {dominio: libre, requerido: true}
+      description:     {dominio: libre, requerido: true, nota: "Resumen 5W fiel a la fuente."}
+      source:          {dominio: abierto-canonico, formato: wikilink, requerido: true,
+                        nota: "Nodo del medio. Forma canónica + registry: Fase 4."}
+      author:          {dominio: abierto-canonico, formato: wikilink, requerido: false,
+                        nota: "Autoría humana de la nota (si la fuente la da); llega con la extracción de meta del artículo (procedencia v5)."}
+      event_date:      {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false,
+                        nota: "Fecha del HECHO; vacía si la fuente no la da."}
+      published:       {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false,
+                        nota: "Fecha de PUBLICACIÓN del artículo (≠ event_date=hecho, ≠ timestamp=captura); procedencia v5."}
+      timestamp:       {dominio: libre, formato: "AAAA-MM-DD", requerido: true,
+                        nota: "Fecha de CAPTURA — siempre se conoce; jamás vacía."}
+      deaths:          {dominio: libre, formato: "entero >= 0", requerido: true,
+                        nota: "FALLECIDOS en el hecho (antes 'victims'). Heridos/desaparecidos NO cuentan aquí."}
+      state:           {dominio: cerrado, enum: estados, requerido: true}
+      municipality:    {dominio: abierto-canonico, catalogo: inegi_municipios, requerido: false}
+      locality:        {dominio: libre, requerido: false,
+                        nota: "Texto de la fuente (colonia/localidad/referencia); el nombre canónico INEGI es trabajo del geocoder."}
+      cvegeo:          {dominio: abierto-canonico, formato: "5 díg.", requerido: false, citado: true,
+                        esperado_si: "geo_precision en [municipality, locality, street]"}
+      lat:             {dominio: derivado, formato: "float (bbox MX) o vacío", requerido: false,
+                        nota: "SOLO el geocoder (enriquecer_vault). Va en par con lon + geo_precision."}
+      lon:             {dominio: derivado, formato: "float (bbox MX) o vacío", requerido: false}
+      geo_precision:   {dominio: cerrado, enum: geo_precision, requerido: false,
+                        nota: "Obligatoria si lat/lon están llenos."}
+      classification:  {dominio: cerrado, formato: wikilink,
+                        enum: [classification_crimen, classification_corrupcion], requerido: true,
+                        nota: "El valor DENTRO de los corchetes pertenece al enum (según case)."}
+      place:           {dominio: derivado, formato: "wikilink \"[[Municipio, Estado]]\"", requerido: false}
+      entities:        {dominio: derivado, formato: "lista de wikilinks", requerido: true,
+                        nota: "UNIÓN de actors_* (derivada; el portero verifica igualdad). Puede ser [] solo si los cuatro actors_* son []."}
+      actors_victim:   {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Víctimas del hecho nombradas por la fuente (ficha person obligatoria)."}
+      actors_alleged:  {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Presuntos EN ESTE hecho; su ficha lleva alleged: true y el cuerpo la atribución."}
+      actors_authority: {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Autoridades/instituciones que investigan o responden."}
+      actors_mentioned: {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Actores citados sin rol operativo (colectivos, testigos, contexto)."}
+      schema_version:  {dominio: derivado, requerido: false, nota: "Versión del contrato con la que se escribió/migró la nota (la estampa el migrador)."}
+    reglas:
+      - "Toda persona NOMBRADA por la fuente (víctima/presunto/funcionario/civil) -> algún actors_* + ficha person (FIEL AL ORIGEN)."
+      - "Todo [[link]] de entities/actors_* resuelve a ficha en Entities/ (integridad referencial = error)."
+      - "case: corrupcion -> sesnsp_*, deaths y geo quedan vacíos."
+      - "Cuerpo: # H1 = title · description con **presunto/a** · blockquote de atribución presunta si hay org imputada · '## Texto completo (resguardo local — no publicar)' · '## Fuentes'."
+
+  context:
+    plantilla: "Admin/Templates/context.md"
+    campos:
+      type:            {dominio: cerrado, valor_fijo: context, requerido: true}
+      case:            {dominio: cerrado, enum: case, requerido: true}
+      id:              {dominio: derivado, formato: "hex(12)", requerido: true}
+      url:             {dominio: abierto-canonico, formato: URI, requerido: true, unico: true}
+      title:           {dominio: libre, requerido: true}
+      description:     {dominio: libre, requerido: true}
+      source:          {dominio: abierto-canonico, formato: wikilink, requerido: true}
+      author:          {dominio: abierto-canonico, formato: wikilink, requerido: false,
+                        nota: "Autoría humana de la nota (si la fuente la da); procedencia v5."}
+      event_date:      {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false}
+      published:       {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false,
+                        nota: "Fecha de PUBLICACIÓN del artículo (≠ event_date, ≠ timestamp); procedencia v5."}
+      timestamp:       {dominio: libre, formato: "AAAA-MM-DD", requerido: true}
+      scope:           {dominio: cerrado, enum: scope_context, requerido: true,
+                        nota: "La ubicación se llena SOLO hasta este nivel."}
+      state:           {dominio: cerrado, enum: estados, requerido: false}
+      municipality:    {dominio: abierto-canonico, catalogo: inegi_municipios, requerido: false}
+      locality:        {dominio: libre, requerido: false}
+      cve_ent:         {dominio: abierto-canonico, formato: "2 díg.", requerido: false, citado: true}
+      cvegeo:          {dominio: abierto-canonico, formato: "5 díg.", requerido: false, citado: true}
+      lat:             {dominio: derivado, requerido: false}
+      lon:             {dominio: derivado, requerido: false}
+      theme:           {dominio: abierto-canonico, formato: wikilink, requerido: false}
+      place:           {dominio: derivado, formato: wikilink, requerido: false}
+      entities:        {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "En context/investigation NO hay actors_*; entities es directa."}
+      schema_version:  {dominio: derivado, requerido: false, nota: "Versión del contrato con la que se escribió/migró la nota (la estampa el migrador)."}
+
+  investigation:
+    plantilla: "Admin/Templates/investigation.md"
+    campos:
+      type:            {dominio: cerrado, valor_fijo: investigation, requerido: true}
+      case:            {dominio: cerrado, enum: case, requerido: true}
+      id:              {dominio: derivado, formato: "hex(12)", requerido: true}
+      url:             {dominio: abierto-canonico, formato: URI, requerido: true, unico: true}
+      title:           {dominio: libre, requerido: true}
+      description:     {dominio: libre, requerido: true}
+      source:          {dominio: abierto-canonico, formato: wikilink, requerido: true}
+      author:          {dominio: abierto-canonico, formato: wikilink, requerido: false,
+                        nota: "Autoría humana de la pieza."}
+      timestamp:       {dominio: libre, formato: "AAAA-MM-DD", requerido: true}
+      published:       {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false}
+      theme:           {dominio: abierto-canonico, formato: wikilink, requerido: false}
+      place:           {dominio: derivado, formato: wikilink, requerido: false}
+      entities:        {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false}
+      schema_version:  {dominio: derivado, requerido: false, nota: "Versión del contrato con la que se escribió/migró la nota (la estampa el migrador)."}
+
+  person:
+    plantilla: "Admin/Templates/person.md"
+    archivo: "Entities/Nombre Apellido Apellido.md"
+    campos:
+      type:            {dominio: cerrado, valor_fijo: person, requerido: true}
+      title:           {dominio: abierto-canonico, requerido: true,
+                        nota: "Nombre tal como lo reporta la fuente (FIEL AL ORIGEN); variantes en aliases."}
+      aliases:         {dominio: libre, formato: lista, requerido: false}
+      role:            {dominio: cerrado, enum: role_person, requerido: true,
+                        nota: "Rol GLOBAL/ocupacional. El rol EN CADA HECHO vive en actors_* de la nota."}
+      organizations:   {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false}
+      status:          {dominio: cerrado, enum: status_person, requerido: true}
+      alleged:         {dominio: cerrado, formato: "true/false", requerido: true,
+                        nota: "true = señalado sin sentencia; el cuerpo SIEMPRE atribuye a la fuente."}
+      partner_of:      {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Relación sentimental ACTUAL según la fuente; recíproca (ERROR si falta; auto-reparable con obsidiana entidades reparar)."}
+      ex_partner_of:   {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Relación sentimental PASADA según la fuente; recíproca."}
+      family_of:       {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Parentesco (el grado se detalla en el cuerpo); recíproca."}
+      associate_of:    {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "Vínculo laboral/negocios; recíproca."}
+      criminal_link:   {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "PRESUNTA asociación criminal persona<->persona: atribución a la fuente OBLIGATORIA en el cuerpo; nunca afirmación de culpabilidad; recíproca."}
+      alleged_link:    {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "PRESUNTO nexo de la persona con una ORGANIZACIÓN (cártel/célula/institución capturada) — la arista funcionario<->cártel. Wikilinks a fichas organization. NO recíproca (la org lo ve por backlinks). alleged implícito: atribución a la fuente OBLIGATORIA en ## Relaciones; NUNCA afirma culpabilidad."}
+      updated:         {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false,
+                        nota: "Fecha de última generación/actualización del EXPEDIENTE (skill `expediente`). Vacío/ausente = ficha aún sin expediente."}
+      schema_version:  {dominio: derivado, requerido: false, nota: "Versión del contrato con la que se escribió/migró la nota (la estampa el migrador)."}
+    reglas:
+      - "Toda relación *_of/criminal_link/alleged_link exige respaldo en el cuerpo (## Relaciones) con atribución ('según X') — FIEL AL ORIGEN: solo lo que la fuente afirma."
+      - "Los wikilinks de relaciones resuelven a ficha existente (error si cuelgan). alleged_link resuelve a ficha organization."
+
+  organization:
+    plantilla: "Admin/Templates/organization.md"
+    archivo: "Entities/<Nombre oficial completo>.md"
+    campos:
+      type:            {dominio: cerrado, valor_fijo: organization, requerido: true}
+      title:           {dominio: abierto-canonico, requerido: true,
+                        nota: "POLÍTICA: nombre oficial COMPLETO; acrónimos SIEMPRE en aliases. Nombres genéricos multi-estado se desambiguan: 'Agencia Estatal de Investigación (Chihuahua)'."}
+      aliases:         {dominio: libre, formato: lista, requerido: false}
+      org_type:        {dominio: cerrado, enum: org_type, requerido: true}
+      scope:           {dominio: cerrado, enum: scope_org, requerido: true}
+      status:          {dominio: cerrado, enum: status_org, requerido: true}
+      faction_of:      {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "ASIMÉTRICA: esta org es célula/facción de un cártel/estructura MAYOR. Se escribe en el hijo; el padre se recupera por backlinks (sin recíproco). Wikilink a ficha organization."}
+      rival_of:        {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "SIMÉTRICA y recíproca: rivalidad/disputa con otra org. Wikilinks a fichas organization."}
+      allied_with:     {dominio: abierto-canonico, formato: "lista de wikilinks", requerido: false,
+                        nota: "SIMÉTRICA y recíproca: alianza/cooperación con otra org. Wikilinks a fichas organization."}
+      updated:         {dominio: libre, formato: "AAAA-MM-DD o \"\"", requerido: false,
+                        nota: "Fecha de última generación/actualización del EXPEDIENTE (skill `expediente`). Vacío/ausente = ficha aún sin expediente."}
+      schema_version:  {dominio: derivado, requerido: false, nota: "Versión del contrato con la que se escribió/migró la nota (la estampa el migrador)."}
+    reglas:
+      - "Sin case, sin geo, sin SESNSP; sus eventos = backlinks."
+      - "Relaciones org<->org: faction_of (asimétrica), rival_of/allied_with (simétricas recíprocas) van en el frontmatter con [[enlaces]] y respaldo en el cuerpo (## Relaciones) con atribución. Otros tipos (absorbe a, escisión de) siguen en prosa hasta que una pregunta los pague (extensión = gobernanza)."

@@ -1,0 +1,40 @@
+filters:
+  and:
+    - 'file.inFolder("Inbox")'
+    - 'file.ext == "md"'
+
+formulas:
+  recibida: 'file.ctime.format("MM-DD HH:mm")'
+
+properties:
+  file.name:
+    displayName: "Nota cruda"
+  actor:
+    displayName: "Interés"
+  case:
+    displayName: "Caso"
+  source:
+    displayName: "Medio"
+  formula.recibida:
+    displayName: "Recibida"
+  status:
+    displayName: "Estatus"
+
+views:
+  - type: table
+    name: "Pendientes por interés"
+    filters:
+      and:
+        - 'status == "sin-procesar"'
+    order:
+      - file.name
+      - actor
+      - case
+      - source
+      - formula.recibida
+    groupBy:
+      property: actor
+      direction: ASC
+    sort:
+      - property: file.ctime
+        direction: DESC
